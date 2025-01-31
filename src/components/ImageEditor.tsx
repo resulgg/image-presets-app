@@ -19,6 +19,7 @@ import {
   FiMaximize,
 } from "react-icons/fi";
 import { useViewStore } from "@/store/viewStore";
+import MobileControls from "@/components/MobileControls";
 
 const tabs = [
   {
@@ -29,6 +30,7 @@ const tabs = [
   },
   { id: "effects", label: "Effects", icon: FiFeather, color: "bg-black" },
   { id: "presets", label: "Presets", icon: FiImage, color: "bg-black" },
+  { id: "view", label: "View", icon: FiMaximize, color: "bg-black" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -188,6 +190,11 @@ export default function ImageEditor() {
 
   const handleTouchStart = useCallback(
     (e: TouchEvent) => {
+      // Disable pinch zoom on mobile, we'll use sliders instead
+      if (window.innerWidth < 640) {
+        return;
+      }
+
       if (e.touches.length === 2) {
         e.preventDefault();
         setIsPinching(true);
@@ -220,6 +227,11 @@ export default function ImageEditor() {
 
   const handleTouchMove = useCallback(
     (e: TouchEvent) => {
+      // Disable pinch zoom on mobile, we'll use sliders instead
+      if (window.innerWidth < 640) {
+        return;
+      }
+
       if (isPinching && e.touches.length === 2) {
         e.preventDefault();
         const touch1 = e.touches[0];
@@ -1803,6 +1815,7 @@ export default function ImageEditor() {
                   {activeTab === "adjustments" && <Adjustments />}
                   {activeTab === "effects" && <Effects />}
                   {activeTab === "presets" && <Presets />}
+                  {activeTab === "view" && <MobileControls />}
                 </div>
 
                 {/* Resize Handles */}
@@ -1962,7 +1975,7 @@ export default function ImageEditor() {
             initial="hidden"
             animate="visible"
           >
-            <div className="grid grid-cols-3 place-items-center sm:flex sm:flex-row gap-1.5 sm:gap-2 w-full sm:w-auto sm:justify-center">
+            <div className="grid grid-cols-4 sm:flex sm:flex-row gap-1.5 sm:gap-2 w-full sm:w-auto sm:justify-center">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.id;
@@ -1976,15 +1989,15 @@ export default function ImageEditor() {
                     className={`w-full sm:w-auto px-2 py-2 sm:px-4 sm:py-2.5 md:px-5 md:py-3 rounded-full font-medium 
                              text-sm sm:text-base md:text-lg
                              transition-all duration-200 flex flex-col sm:flex-row items-center 
-                             justify-center sm:justify-start gap-1 sm:gap-3
+                             justify-center gap-1 sm:gap-3
                              ${
                                isActive
                                  ? "bg-white/20 backdrop-blur-xl text-white"
                                  : "bg-white/10 text-white/70 hover:bg-white/15 hover:text-white"
                              }`}
                   >
-                    <Icon className="w-7 h-7 sm:w-7 sm:h-7 md:w-8 md:h-8 transition-all duration-300 group-hover:scale-110" />
-                    <span className="hidden sm:inline text-sm md:text-base">
+                    <Icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 transition-all duration-300 group-hover:scale-110" />
+                    <span className="text-xs sm:text-sm md:text-base">
                       {tab.label}
                     </span>
                   </motion.button>
@@ -1993,6 +2006,26 @@ export default function ImageEditor() {
             </div>
           </motion.div>
         </motion.div>
+      )}
+
+      {/* Reset View Button */}
+      {isViewModified && (
+        <motion.button
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={resetView}
+          className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 
+               bg-black/50 backdrop-blur-xl rounded-full text-white/90 
+               hover:bg-black/70 transition-colors border border-white/10
+               flex items-center gap-2 z-10"
+          title="Reset View"
+        >
+          <FiMaximize className="w-4 h-4" />
+          <span className="text-sm font-medium">Reset</span>
+        </motion.button>
       )}
 
       {/* Export Modal */}
