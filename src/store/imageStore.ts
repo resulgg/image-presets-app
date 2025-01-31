@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 
 let historyTimeout: NodeJS.Timeout;
-const HISTORY_DEBOUNCE = 1000; // Increase debounce time for heavy filters
 
 export type Filters = {
   brightness: number;
@@ -143,11 +142,6 @@ export const defaultFilters: Filters = {
   prismLightSpread: 0,
 };
 
-// Separate update logic for heavy filters
-const isHeavyFilter = (filter: keyof Filters): boolean => {
-  return ["gamma", "posterize", "duotone", "vignette"].includes(filter);
-};
-
 export const useImageStore = create<ImageState>()(
   devtools((set, get) => ({
     image: null,
@@ -191,8 +185,7 @@ export const useImageStore = create<ImageState>()(
           clearTimeout(historyTimeout);
         }
 
-        // Use longer debounce time for heavy filters
-        const debounceTime = isHeavyFilter(filter) ? HISTORY_DEBOUNCE : 500;
+        const debounceTime = 500;
 
         // Set a new timeout to add to history
         historyTimeout = setTimeout(() => {

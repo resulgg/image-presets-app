@@ -6,6 +6,7 @@ import { useImageStore } from "@/store/imageStore";
 import Adjustments from "@/components/filters/Adjustments";
 import Effects from "@/components/filters/Effects";
 import Presets from "@/components/filters/Presets";
+import Logo from "@/components/Logo";
 import {
   FiDownload,
   FiRefreshCcw,
@@ -17,6 +18,7 @@ import {
   FiMove,
   FiMaximize,
 } from "react-icons/fi";
+import { useViewStore } from "@/store/viewStore";
 
 const tabs = [
   {
@@ -69,6 +71,7 @@ export default function ImageEditor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const dragConstraintsRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [panelPosition, setPanelPosition] = useState(() => {
     const savedPosition = localStorage.getItem("panelPosition");
     return savedPosition
@@ -87,18 +90,31 @@ export default function ImageEditor() {
           height: window.innerHeight - 120,
         };
   });
+
   const { image, filters, resetFilters, undo, setImage } = useImageStore();
   const dragControls = useDragControls();
-  const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const lastDistance = useRef<number | null>(null);
-  // Add this state to track if view is modified
-  const [isViewModified, setIsViewModified] = useState(false);
 
-  // Save panel position and size to localStorage when they change
+  // Get view state from store
+  const {
+    scale,
+    position,
+    isViewModified,
+    handleZoom,
+    handlePan,
+    resetView,
+    setIsDragging,
+    setStartPos,
+    setPosition,
+    checkBounds,
+    setIsPinching,
+    setInitialPinchDistance,
+    setLastPinchScale,
+    isPinching,
+    isDragging,
+    startPos,
+  } = useViewStore();
+
+  // Save panel position and size to localStorage
   useEffect(() => {
     if (panelPosition) {
       localStorage.setItem("panelPosition", JSON.stringify(panelPosition));
@@ -128,148 +144,138 @@ export default function ImageEditor() {
     return () => resizeObserver.disconnect();
   }, []);
 
-  const applyHeavyFilters = useCallback(
-    (ctx: CanvasRenderingContext2D, width: number, height: number) => {
-      const imageData = ctx.getImageData(0, 0, width, height);
-      const data = imageData.data;
-
-      // Create lookup tables for gamma correction
-      const gammaLookup = new Uint8Array(256);
-      if (filters.gamma !== 1) {
-        const gammaCorrection = 1 / filters.gamma;
-        for (let i = 0; i < 256; i++) {
-          gammaLookup[i] = Math.round(255 * Math.pow(i / 255, gammaCorrection));
+  // Event handlers for mouse and touch interactions
+  const handleWheel = useCallback(
+    (e: WheelEvent) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        if (e.deltaY !== 0) {
+          handleZoom(-e.deltaY);
+        } else if (e.deltaX !== 0) {
+          handlePan(e.deltaX, 0);
         }
-      }
-
-      // Process all pixel manipulations in a single pass
-      for (let i = 0; i < data.length; i += 4) {
-        let r = data[i];
-        let g = data[i + 1];
-        let b = data[i + 2];
-
-        // Apply gamma correction first if enabled
-        if (filters.gamma !== 1) {
-          r = gammaLookup[r];
-          g = gammaLookup[g];
-          b = gammaLookup[b];
-        }
-
-        // Apply posterize effect if enabled
-        if (filters.posterize > 0) {
-          const levels = Math.max(2, Math.round(20 - filters.posterize));
-          const step = 255 / (levels - 1);
-          r = Math.round(Math.round(r / step) * step);
-          g = Math.round(Math.round(g / step) * step);
-          b = Math.round(Math.round(b / step) * step);
-        }
-
-        // Calculate luminance (perceived brightness)
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-        // Apply highlights (affects brighter areas more)
-        if (filters.highlights !== 0) {
-          if (luminance > 0.5) {
-            const factor =
-              1 + (filters.highlights / 100) * (luminance - 0.5) * 2;
-            r = Math.min(255, Math.round(r * factor));
-            g = Math.min(255, Math.round(g * factor));
-            b = Math.min(255, Math.round(b * factor));
-          }
-        }
-
-        // Apply shadows (affects darker areas more)
-        if (filters.shadows !== 0) {
-          if (luminance < 0.5) {
-            const factor = 1 + (filters.shadows / 100) * (0.5 - luminance) * 2;
-            r = Math.min(255, Math.round(r * factor));
-            g = Math.min(255, Math.round(g * factor));
-            b = Math.min(255, Math.round(b * factor));
-          }
-        }
-
-        // Apply vibrance
-        if (filters.vibrance !== 100) {
-          const avg = (r + g + b) / 3;
-          const max = Math.max(r, g, b);
-          const min = Math.min(r, g, b);
-          const saturation = (max - min) / (max + 0.001);
-          const amount = ((filters.vibrance - 100) / 100) * 2;
-          const factor = 1 + amount * (1 - saturation);
-
-          r = Math.min(255, Math.max(0, Math.round(r + (r - avg) * factor)));
-          g = Math.min(255, Math.max(0, Math.round(g + (g - avg) * factor)));
-          b = Math.min(255, Math.max(0, Math.round(b + (b - avg) * factor)));
-        }
-
-        // Store the modified pixel values
-        data[i] = r;
-        data[i + 1] = g;
-        data[i + 2] = b;
-      }
-
-      // Apply noise if enabled
-      if (filters.noise > 0) {
-        for (let i = 0; i < data.length; i += 4) {
-          if (Math.random() > 0.5) {
-            const noise = (Math.random() - 0.5) * filters.noise * 2;
-            data[i] = Math.min(255, Math.max(0, data[i] + noise));
-            data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
-            data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
-          }
-        }
-      }
-
-      // Apply duotone if enabled
-      if (filters.duotone && filters.duotoneColors?.length === 2) {
-        const color1 = filters.duotoneColors[0];
-        const color2 = filters.duotoneColors[1];
-
-        // Create a lookup table for duotone colors
-        const duotoneLookup = new Array(256);
-        for (let i = 0; i < 256; i++) {
-          const t = i / 255;
-          duotoneLookup[i] = {
-            r: Math.round(color1.r * (1 - t) + color2.r * t),
-            g: Math.round(color1.g * (1 - t) + color2.g * t),
-            b: Math.round(color1.b * (1 - t) + color2.b * t),
-          };
-        }
-
-        for (let i = 0; i < data.length; i += 4) {
-          const avg = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
-          const color = duotoneLookup[avg];
-          data[i] = color.r;
-          data[i + 1] = color.g;
-          data[i + 2] = color.b;
-        }
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-
-      // Apply vignette last
-      if (filters.vignette > 0) {
-        const gradient = ctx.createRadialGradient(
-          width / 2,
-          height / 2,
-          0,
-          width / 2,
-          height / 2,
-          Math.sqrt((width / 2) ** 2 + (height / 2) ** 2)
-        );
-
-        gradient.addColorStop(0, "rgba(0,0,0,0)");
-        gradient.addColorStop(0.5, `rgba(0,0,0,${filters.vignette * 0.003})`);
-        gradient.addColorStop(1, `rgba(0,0,0,${filters.vignette * 0.01})`);
-
-        ctx.globalCompositeOperation = "multiply";
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, width, height);
-        ctx.globalCompositeOperation = "source-over";
       }
     },
-    [filters]
+    [handleZoom, handlePan]
   );
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.shiftKey) {
+        e.preventDefault();
+        setIsDragging(true);
+        setStartPos({ x: e.clientX - position.x, y: e.clientY - position.y });
+      }
+    },
+    [position, setIsDragging, setStartPos]
+  );
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isDragging) {
+        setPosition({
+          x: e.clientX - startPos.x,
+          y: e.clientY - startPos.y,
+        });
+      }
+    },
+    [isDragging, startPos, setPosition]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, [setIsDragging]);
+
+  const handleTouchStart = useCallback(
+    (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        setIsPinching(true);
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const distance = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY
+        );
+        setInitialPinchDistance(distance);
+        setLastPinchScale(scale);
+      } else if (e.touches.length === 1) {
+        setStartPos({
+          x: e.touches[0].clientX - position.x,
+          y: e.touches[0].clientY - position.y,
+        });
+        setIsDragging(true);
+      }
+    },
+    [
+      scale,
+      position,
+      setIsPinching,
+      setInitialPinchDistance,
+      setLastPinchScale,
+      setStartPos,
+      setIsDragging,
+    ]
+  );
+
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      if (isPinching && e.touches.length === 2) {
+        e.preventDefault();
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const distance = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY
+        );
+
+        // Calculate center point of the pinch
+        const centerX = (touch1.clientX + touch2.clientX) / 2;
+        const centerY = (touch1.clientY + touch2.clientY) / 2;
+
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          const offsetX = centerX - rect.left;
+          const offsetY = centerY - rect.top;
+          handleZoom(distance, { x: offsetX, y: offsetY });
+        }
+      } else if (!isPinching && e.touches.length === 1 && isDragging) {
+        e.preventDefault();
+        const touch = e.touches[0];
+        setPosition({
+          x: touch.clientX - startPos.x,
+          y: touch.clientY - startPos.y,
+        });
+      }
+    },
+    [isPinching, isDragging, handleZoom, startPos, setPosition]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+    setIsPinching(false);
+    setInitialPinchDistance(null);
+
+    if (containerRef.current) {
+      checkBounds(containerRef.current.getBoundingClientRect());
+    }
+  }, [checkBounds, setIsDragging, setIsPinching, setInitialPinchDistance]);
+
+  // Add event listeners
+  useEffect(() => {
+    // Attach events to window instead of container
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("touchstart", handleTouchStart, { passive: false });
+    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchend", handleTouchEnd);
+
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [handleWheel, handleTouchStart, handleTouchMove, handleTouchEnd]);
 
   const renderCanvas = useCallback(
     (
@@ -288,7 +294,6 @@ export default function ImageEditor() {
         canvas.width = img.width;
         canvas.height = img.height;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
         // Reset all composite operations and filters
         ctx.filter = "none";
         ctx.globalCompositeOperation = "source-over";
@@ -1329,8 +1334,146 @@ export default function ImageEditor() {
           ctx.globalCompositeOperation = "source-over";
         }
 
-        // Apply heavy pixel manipulations
-        applyHeavyFilters(ctx, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+
+        // Create lookup tables for gamma correction
+        const gammaLookup = new Uint8Array(256);
+        if (filters.gamma !== 1) {
+          const gammaCorrection = 1 / filters.gamma;
+          for (let i = 0; i < 256; i++) {
+            gammaLookup[i] = Math.round(
+              255 * Math.pow(i / 255, gammaCorrection)
+            );
+          }
+        }
+
+        // Process all pixel manipulations in a single pass
+        for (let i = 0; i < data.length; i += 4) {
+          let r = data[i];
+          let g = data[i + 1];
+          let b = data[i + 2];
+
+          // Apply gamma correction first if enabled
+          if (filters.gamma !== 1) {
+            r = gammaLookup[r];
+            g = gammaLookup[g];
+            b = gammaLookup[b];
+          }
+
+          // Apply posterize effect if enabled
+          if (filters.posterize > 0) {
+            const levels = Math.max(2, Math.round(20 - filters.posterize));
+            const step = 255 / (levels - 1);
+            r = Math.round(Math.round(r / step) * step);
+            g = Math.round(Math.round(g / step) * step);
+            b = Math.round(Math.round(b / step) * step);
+          }
+
+          // Calculate luminance (perceived brightness)
+          const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+          // Apply highlights (affects brighter areas more)
+          if (filters.highlights !== 0) {
+            if (luminance > 0.5) {
+              const factor =
+                1 + (filters.highlights / 100) * (luminance - 0.5) * 2;
+              r = Math.min(255, Math.round(r * factor));
+              g = Math.min(255, Math.round(g * factor));
+              b = Math.min(255, Math.round(b * factor));
+            }
+          }
+
+          // Apply shadows (affects darker areas more)
+          if (filters.shadows !== 0) {
+            if (luminance < 0.5) {
+              const factor =
+                1 + (filters.shadows / 100) * (0.5 - luminance) * 2;
+              r = Math.min(255, Math.round(r * factor));
+              g = Math.min(255, Math.round(g * factor));
+              b = Math.min(255, Math.round(b * factor));
+            }
+          }
+
+          // Apply vibrance
+          if (filters.vibrance !== 100) {
+            const avg = (r + g + b) / 3;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const saturation = (max - min) / (max + 0.001);
+            const amount = ((filters.vibrance - 100) / 100) * 2;
+            const factor = 1 + amount * (1 - saturation);
+
+            r = Math.min(255, Math.max(0, Math.round(r + (r - avg) * factor)));
+            g = Math.min(255, Math.max(0, Math.round(g + (g - avg) * factor)));
+            b = Math.min(255, Math.max(0, Math.round(b + (b - avg) * factor)));
+          }
+
+          // Store the modified pixel values
+          data[i] = r;
+          data[i + 1] = g;
+          data[i + 2] = b;
+        }
+
+        // Apply noise if enabled
+        if (filters.noise > 0) {
+          for (let i = 0; i < data.length; i += 4) {
+            if (Math.random() > 0.5) {
+              const noise = (Math.random() - 0.5) * filters.noise * 2;
+              data[i] = Math.min(255, Math.max(0, data[i] + noise));
+              data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
+              data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
+            }
+          }
+        }
+
+        // Apply duotone if enabled
+        if (filters.duotone && filters.duotoneColors?.length === 2) {
+          const color1 = filters.duotoneColors[0];
+          const color2 = filters.duotoneColors[1];
+
+          // Create a lookup table for duotone colors
+          const duotoneLookup = new Array(256);
+          for (let i = 0; i < 256; i++) {
+            const t = i / 255;
+            duotoneLookup[i] = {
+              r: Math.round(color1.r * (1 - t) + color2.r * t),
+              g: Math.round(color1.g * (1 - t) + color2.g * t),
+              b: Math.round(color1.b * (1 - t) + color2.b * t),
+            };
+          }
+
+          for (let i = 0; i < data.length; i += 4) {
+            const avg = Math.round((data[i] + data[i + 1] + data[i + 2]) / 3);
+            const color = duotoneLookup[avg];
+            data[i] = color.r;
+            data[i + 1] = color.g;
+            data[i + 2] = color.b;
+          }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Apply vignette last
+        if (filters.vignette > 0) {
+          const gradient = ctx.createRadialGradient(
+            canvas.width / 2,
+            canvas.height / 2,
+            0,
+            canvas.width / 2,
+            canvas.height / 2,
+            Math.sqrt((canvas.width / 2) ** 2 + (canvas.height / 2) ** 2)
+          );
+
+          gradient.addColorStop(0, "rgba(0,0,0,0)");
+          gradient.addColorStop(0.5, `rgba(0,0,0,${filters.vignette * 0.003})`);
+          gradient.addColorStop(1, `rgba(0,0,0,${filters.vignette * 0.01})`);
+
+          ctx.globalCompositeOperation = "multiply";
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.globalCompositeOperation = "source-over";
+        }
 
         // Handle download if needed
         if (shouldDownload) {
@@ -1343,7 +1486,7 @@ export default function ImageEditor() {
 
       img.src = image;
     },
-    [image, filters, applyHeavyFilters]
+    [image, filters]
   );
 
   // Effect to re-render canvas when image or filters change
@@ -1365,134 +1508,6 @@ export default function ImageEditor() {
     renderCanvas(canvas, true, format);
   };
 
-  // Add these new functions before the renderCanvas function
-  const handleWheel = useCallback(
-    (e: WheelEvent) => {
-      if (e.shiftKey) {
-        e.preventDefault();
-        const delta = -e.deltaY;
-        const zoomFactor = 0.1; // Daha belirgin zoom için faktörü artırdım
-        const newScale = Math.min(
-          Math.max(0.1, scale + (delta > 0 ? zoomFactor : -zoomFactor)),
-          5
-        );
-        setScale(newScale);
-        setIsViewModified(
-          newScale !== 1 || position.x !== 0 || position.y !== 0
-        );
-      } else {
-        // Pan with mouse wheel
-        e.preventDefault();
-        setPosition((prev) => ({
-          x: prev.x - e.deltaX,
-          y: prev.y - e.deltaY,
-        }));
-      }
-    },
-    [scale, position, setScale, setPosition, setIsViewModified]
-  );
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.shiftKey) {
-      // Changed from ctrl to shift key
-      e.preventDefault();
-      setIsDragging(true);
-      setStartPos({ x: e.clientX - position.x, y: e.clientY - position.y });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      setPosition({
-        x: e.clientX - startPos.x,
-        y: e.clientY - startPos.y,
-      });
-    }
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      );
-      lastDistance.current = distance;
-    }
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (e.touches.length === 2) {
-      e.preventDefault();
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
-      const distance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      );
-
-      if (lastDistance.current !== null) {
-        const delta = distance - lastDistance.current;
-        const newScale = Math.min(Math.max(0.1, scale + delta * 0.01), 5);
-        setScale(newScale);
-        setIsViewModified(
-          newScale !== 1 || position.x !== 0 || position.y !== 0
-        );
-      }
-
-      lastDistance.current = distance;
-    } else if (e.touches.length === 1) {
-      e.preventDefault();
-      const touch = e.touches[0];
-      const prevTouch = e.changedTouches[0];
-      const newPosition = {
-        x: position.x + (touch.clientX - prevTouch.clientX),
-        y: position.y + (touch.clientY - prevTouch.clientY),
-      };
-      setPosition(newPosition);
-      setIsViewModified(
-        scale !== 1 || newPosition.x !== 0 || newPosition.y !== 0
-      );
-    }
-  };
-
-  const handleTouchEnd = () => {
-    lastDistance.current = null;
-  };
-
-  const resetZoom = () => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-    setIsViewModified(false);
-  };
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    container.addEventListener("touchstart", handleTouchStart, {
-      passive: false,
-    });
-    container.addEventListener("touchmove", handleTouchMove, {
-      passive: false,
-    });
-    container.addEventListener("touchend", handleTouchEnd);
-
-    return () => {
-      container.removeEventListener("wheel", handleWheel);
-      container.removeEventListener("touchstart", handleTouchStart);
-      container.removeEventListener("touchmove", handleTouchMove);
-      container.removeEventListener("touchend", handleTouchEnd);
-    };
-  }, [handleWheel]);
-
   return (
     <div className="fixed inset-0 flex flex-col bg-zinc-950 overflow-hidden">
       {/* Logo and Action Buttons */}
@@ -1507,71 +1522,7 @@ export default function ImageEditor() {
         }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-3">
-          <motion.div
-            className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 p-0.5"
-            whileHover={{ scale: 1.1, rotate: 180 }}
-            transition={{
-              type: "spring",
-              stiffness: 400,
-              damping: 20,
-            }}
-          >
-            <div className="absolute inset-[2px] rounded-[10px] bg-black/50 backdrop-blur-xl" />
-            <motion.div
-              className="absolute inset-0 flex items-center justify-center text-white"
-              initial={{ rotate: 0 }}
-              animate={{ rotate: 360 }}
-              transition={{
-                duration: 20,
-                repeat: Infinity,
-                ease: "linear",
-              }}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="w-5 h-5"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 2L2 7L12 12L22 7L12 2Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M2 17L12 22L22 17"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M2 12L12 17L22 12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </motion.div>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{
-              delay: 0.2,
-              type: "spring",
-              stiffness: 400,
-              damping: 30,
-            }}
-            className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 text-transparent bg-clip-text"
-          >
-            Lumina
-          </motion.div>
-        </div>
+        <Logo />
 
         {/* Action Buttons */}
         {image && (
@@ -1645,7 +1596,7 @@ export default function ImageEditor() {
       <div className="flex-1 relative h-screen overflow-hidden">
         <motion.div ref={dragConstraintsRef} className="absolute inset-0">
           {image ? (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
               <div
                 className={`relative w-full h-full flex items-center justify-center
                             transition-all duration-300 ease-in-out
@@ -1684,12 +1635,12 @@ export default function ImageEditor() {
                       exit={{ opacity: 0, y: -10 }}
                       whileHover={{ scale: 1.1 }}
                       whileTap={{ scale: 0.9 }}
-                      onClick={resetZoom}
+                      onClick={resetView}
                       className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 
                                  bg-black/50 backdrop-blur-xl rounded-full text-white/90 
                                  hover:bg-black/70 transition-colors border border-white/10
                                  flex items-center gap-2"
-                      title="Reset Zoom"
+                      title="Reset View"
                     >
                       <FiMaximize className="w-4 h-4" />
                       <span className="text-sm font-medium">Reset</span>
