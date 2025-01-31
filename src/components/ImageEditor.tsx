@@ -1997,7 +1997,7 @@ export default function ImageEditor() {
                              }`}
                   >
                     <Icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 transition-all duration-300 group-hover:scale-110" />
-                    <span className="text-xs sm:text-sm md:text-base">
+                    <span className="text-xs hidden sm:block sm:text-sm md:text-base">
                       {tab.label}
                     </span>
                   </motion.button>
