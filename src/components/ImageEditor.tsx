@@ -2008,26 +2008,6 @@ export default function ImageEditor() {
         </motion.div>
       )}
 
-      {/* Reset View Button */}
-      {isViewModified && (
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
-          onClick={resetView}
-          className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 
-               bg-black/50 backdrop-blur-xl rounded-full text-white/90 
-               hover:bg-black/70 transition-colors border border-white/10
-               flex items-center gap-2 z-10"
-          title="Reset View"
-        >
-          <FiMaximize className="w-4 h-4" />
-          <span className="text-sm font-medium">Reset</span>
-        </motion.button>
-      )}
-
       {/* Export Modal */}
       <AnimatePresence>
         {showExportModal && (
