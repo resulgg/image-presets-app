@@ -1,8 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lumina - Advanced Image Editor
+
+A powerful, modern web-based image editor built with Next.js and React. Lumina provides a comprehensive suite of image editing tools with a beautiful, intuitive interface.
+
+![Lumina Interface](public/screenshot.png)
+
+## Features
+
+- 🎨 Professional-grade image adjustments
+
+  - Brightness, contrast, saturation
+  - Exposure, highlights, shadows
+  - Temperature and tint
+  - Sharpness and blur
+  - Gamma correction
+  - Noise reduction
+
+- ✨ Creative Effects
+
+  - Vintage and retro filters
+  - VHS and CRT effects
+  - RGB shift and glitch effects
+  - Light leaks and vignettes
+  - Duotone and posterize
+  - Custom presets
+
+- 💫 Advanced Capabilities
+  - Real-time preview
+  - Undo/redo functionality
+  - Multiple export formats (PNG, JPEG, WebP)
+  - Touch and gesture support
+  - Responsive design
+  - Drag and resize interface
+
+## Tech Stack
+
+- **Framework**: Next.js 15
+- **UI Library**: React 19
+- **Styling**: TailwindCSS
+- **Animation**: Framer Motion
+- **State Management**: Zustand
+- **Image Processing**: Canvas API
+- **Development**: TypeScript
 
 ## Getting Started
 
-First, run the development server:
+1. Clone the repository:
+
+```bash
+git clone https://github.com/yourusername/lumina.git
+cd lumina
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+3. Run the development server:
 
 ```bash
 npm run dev
@@ -10,27 +69,38 @@ npm run dev
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Click the "Change" button or drag and drop an image to start editing
+2. Use the sidebar panels to access different editing tools:
+   - Adjustments: Basic image corrections
+   - Effects: Creative filters and effects
+   - Presets: Quick-apply predefined looks
+   - View: Pan and zoom controls
+3. Use the top toolbar for:
+   - Undo changes
+   - Reset all adjustments
+   - Change image
+   - Export edited image
 
-## Learn More
+## Development
 
-To learn more about Next.js, take a look at the following resources:
+The project uses Next.js with TypeScript. Key directories:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/src/components`: React components
+- `/src/store`: Zustand state management
+- `/src/utils`: Utility functions
+- `/src/hooks`: Custom React hooks
+- `/src/constants`: Configuration constants
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Contributing
 
-## Deploy on Vercel
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
