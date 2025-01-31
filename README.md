@@ -2,8 +2,6 @@
 
 A powerful, modern web-based image editor built with Next.js and React. Lumina provides a comprehensive suite of image editing tools with a beautiful, intuitive interface.
 
-![Lumina Interface](public/screenshot.png)
-
 ## Features
 
 - 🎨 Professional-grade image adjustments
