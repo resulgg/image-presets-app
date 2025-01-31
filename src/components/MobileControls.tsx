@@ -1,6 +1,5 @@
 import { useViewStore } from "@/store/viewStore";
 import Slider from "@/components/ui/Slider";
-import { FiMove } from "react-icons/fi";
 
 export default function MobileControls() {
   const { scale, position, handleZoom, handlePan, resetView } = useViewStore();
