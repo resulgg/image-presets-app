@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Image Presets App",
+  title: "Lumina | Image Editor",
   description:
     "A powerful image manipulation application with various presets and filters",
 };
